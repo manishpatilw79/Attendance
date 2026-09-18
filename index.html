@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Timecard</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap');
+
+  :root{
+    --navy:#16233a;
+    --navy-2:#22334f;
+    --slate:#5c6b7d;
+    --paper:#f6f5f2;
+    --panel:#ffffff;
+    --line:#e1ddd3;
+    --day:#b8842f;
+    --night:#2c4a68;
+    --ot:#a4402f;
+    --good:#2f6d4f;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--navy);
+    font-family:'Inter',sans-serif;
+    padding:0 0 90px;
+  }
+  h1,h2{font-family:'Fraunces',serif;font-weight:600;margin:0;}
+  .wrap{max-width:980px;margin:0 auto;padding:0 20px;}
+
+  .topbar{background:var(--navy);color:#f2f0ea;padding:26px 20px;margin-bottom:28px;}
+  .topbar-inner{max-width:980px;margin:0 auto;display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:14px;}
+  .topbar h1{font-size:1.9rem;color:#fff;letter-spacing:-0.01em;}
+  .topbar .sub{font-size:0.8rem;color:#aab3c2;margin-top:4px;}
+  .status{font-size:0.7rem;color:#8ab68f;margin-top:4px;}
+  .status.err{color:#e08a7a;}
+  .export-group{display:flex;gap:8px;flex-wrap:wrap;}
+  .export-btn{
+    background:transparent;border:1px solid #4a5b78;color:#e6e9ef;
+    padding:8px 14px;font-size:0.78rem;font-family:'Inter',sans-serif;
+    cursor:pointer;border-radius:3px;transition:background .15s;
+  }
+  .export-btn:hover{background:#243756;}
+
+  .rates{
+    display:flex;gap:24px;flex-wrap:wrap;
+    background:var(--panel);border:1px solid var(--line);border-radius:6px;
+    padding:16px 20px;margin-bottom:22px;
+    box-shadow:0 1px 2px rgba(22,35,58,0.04);
+  }
+  .rate-field{display:flex;flex-direction:column;gap:4px;}
+  .rate-field label{font-size:0.7rem;color:var(--slate);font-weight:500;}
+  .rate-field input{
+    font-family:'Inter',sans-serif;font-size:0.95rem;font-weight:600;
+    border:none;border-bottom:2px solid var(--navy);background:transparent;
+    width:100px;padding:3px 0;color:var(--navy);
+  }
+  .rate-field input:focus{outline:none;border-color:var(--day);}
+
+  form.entry{
+    display:grid;grid-template-columns:repeat(4,1fr);gap:14px;
+    background:var(--panel);border:1px solid var(--line);border-radius:6px;
+    padding:20px;margin-bottom:22px;box-shadow:0 1px 2px rgba(22,35,58,0.04);
+  }
+  form.entry .field{display:flex;flex-direction:column;gap:5px;}
+  form.entry .field.wide{grid-column:1/-1;}
+  form.entry label{font-size:0.7rem;color:var(--slate);font-weight:500;}
+  form.entry input,form.entry select{
+    font-family:'Inter',sans-serif;font-size:0.88rem;
+    padding:8px 10px;border:1px solid var(--line);border-radius:4px;
+    background:var(--paper);color:var(--navy);
+  }
+  form.entry input:focus,form.entry select:focus{outline:none;border-color:var(--navy);}
+  .shift-toggle{display:flex;gap:6px;}
+  .shift-toggle button{
+    flex:1;padding:8px 4px;border:1px solid var(--line);background:var(--paper);
+    font-family:'Inter',sans-serif;font-size:0.82rem;cursor:pointer;border-radius:4px;color:var(--navy);
+  }
+  .shift-toggle button.active[data-v="day"]{background:var(--day);color:#fff;border-color:var(--day);}
+  .shift-toggle button.active[data-v="night"]{background:var(--night);color:#fff;border-color:var(--night);}
+  .form-actions{grid-column:1/-1;display:flex;gap:10px;}
+  .add-btn{
+    flex:1;background:var(--navy);color:#fff;border:none;border-radius:4px;
+    padding:12px;font-family:'Inter',sans-serif;font-size:0.9rem;font-weight:600;
+    cursor:pointer;letter-spacing:0.01em;
+  }
+  .add-btn:hover{background:#0e1829;}
+  .add-btn:disabled{opacity:0.6;cursor:not-allowed;}
+  .cancel-btn{
+    background:transparent;color:var(--slate);border:1px solid var(--line);border-radius:4px;
+    padding:12px 18px;font-family:'Inter',sans-serif;font-size:0.85rem;cursor:pointer;display:none;
+  }
+  .cancel-btn.show{display:block;}
+  .editing-flag{grid-column:1/-1;font-size:0.78rem;color:var(--day);font-weight:600;display:none;}
+  .editing-flag.show{display:block;}
+
+  .summary{
+    display:grid;grid-template-columns:repeat(4,1fr);gap:1px;
+    background:var(--line);border:1px solid var(--line);border-radius:6px;overflow:hidden;
+    margin-bottom:22px;
+  }
+  .summary .cell{background:var(--panel);padding:16px 18px;}
+  .summary .cell .num{font-family:'Fraunces',serif;font-size:1.6rem;font-weight:600;color:var(--navy);}
+  .summary .cell .lbl{font-size:0.7rem;color:var(--slate);margin-top:2px;}
+
+  .table-panel{background:var(--panel);border:1px solid var(--line);border-radius:6px;overflow:hidden;box-shadow:0 1px 2px rgba(22,35,58,0.04);}
+  table{width:100%;border-collapse:collapse;}
+  thead th{
+    text-align:left;font-size:0.68rem;color:var(--slate);font-weight:600;
+    text-transform:uppercase;letter-spacing:0.03em;
+    background:#f0eee8;padding:11px 12px;border-bottom:1px solid var(--line);
+  }
+  tbody td{padding:11px 12px;border-bottom:1px solid var(--line);font-size:0.86rem;vertical-align:middle;}
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr:hover{background:#faf9f6;}
+  .badge{padding:3px 9px;font-size:0.68rem;border-radius:3px;color:#fff;display:inline-block;font-weight:500;}
+  .badge.day{background:var(--day);}
+  .badge.night{background:var(--night);}
+  .ot-tag{color:var(--ot);font-weight:600;}
+  .remark-cell{color:var(--slate);font-size:0.8rem;max-width:160px;}
+  .row-actions{display:flex;gap:6px;}
+  .icon-btn{
+    background:none;border:1px solid var(--line);color:var(--slate);border-radius:4px;
+    padding:5px 9px;font-size:0.72rem;cursor:pointer;font-family:'Inter',sans-serif;
+  }
+  .icon-btn:hover{border-color:var(--navy);color:var(--navy);}
+  .icon-btn.del:hover{border-color:var(--ot);color:var(--ot);}
+  .empty{padding:48px 10px;text-align:center;color:#9aa2ac;font-size:0.85rem;}
+
+  @media(max-width:760px){
+    form.entry{grid-template-columns:repeat(2,1fr);}
+    .summary{grid-template-columns:repeat(2,1fr);}
+    table thead{display:none;}
+    table, tbody, tr, td{display:block;width:100%;}
+    tbody tr{border-bottom:2px solid var(--line);padding:10px 0;}
+    tbody td{display:flex;justify-content:space-between;gap:10px;border-bottom:none;padding:5px 12px;}
+    tbody td::before{content:attr(data-label);color:var(--slate);font-size:0.68rem;font-weight:600;}
+  }
+  @media print{
+    .topbar .export-group, form.entry, .icon-btn{display:none !important;}
+    body{padding:0;}
+    .topbar{background:#fff;color:#000;border-bottom:2px solid #000;}
+    .topbar h1, .topbar .sub{color:#000;}
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="topbar-inner">
+      <div>
+        <h1>Timecard</h1>
+        <div class="sub">Attendance &amp; salary log</div>
+        <div class="status" id="status">Connecting...</div>
+      </div>
+      <div class="export-group">
+        <button class="export-btn" id="exportCsv">Download CSV</button>
+        <button class="export-btn" id="exportPdf">Download PDF</button>
+      </div>
+    </div>
+  </div>
+
+<div class="wrap">
+  <div class="rates">
+    <div class="rate-field"><label>Hourly rate</label><input type="number" id="hourlyRate" step="0.01" value="0"></div>
+    <div class="rate-field"><label>OT multiplier (×)</label><input type="number" id="otMultiplier" step="0.1" value="1.5"></div>
+    <div class="rate-field"><label>Standard hrs/day</label><input type="number" id="stdHours" step="0.5" value="8"></div>
+  </div>
+
+  <form class="entry" id="entryForm">
+    <div class="editing-flag" id="editingFlag">Editing existing record — update or cancel below.</div>
+    <div class="field"><label>Date</label><input type="date" id="f-date" required></div>
+    <div class="field">
+      <label>Shift</label>
+      <div class="shift-toggle">
+        <button type="button" data-v="day" class="active">Day</button>
+        <button type="button" data-v="night">Night</button>
+      </div>
+      <input type="hidden" id="f-shift" value="day">
+    </div>
+    <div class="field"><label>Check in</label><input type="time" id="f-in" required></div>
+    <div class="field"><label>Check out</label><input type="time" id="f-out" required></div>
+    <div class="field"><label>Break (min)</label><input type="number" id="f-break" value="0" min="0"></div>
+    <div class="field wide"><label>Remark</label><input type="text" id="f-note" placeholder="e.g. covered late shift, site visit, half day..."></div>
+    <div class="form-actions">
+      <button type="submit" class="add-btn" id="submitBtn">Add record</button>
+      <button type="button" class="cancel-btn" id="cancelBtn">Cancel edit</button>
+    </div>
+  </form>
+
+  <div class="summary" id="summary"></div>
+
+  <div class="table-panel">
+    <table>
+      <thead>
+        <tr><th>Date</th><th>Shift</th><th>In</th><th>Out</th><th>Hours</th><th>OT</th><th>Pay</th><th>Remark</th><th></th></tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = "https://cpwlammdgzssvecpodtz.supabase.co";
+const SUPABASE_KEY = "sb_publishable_IKIbDWtWSysqtj0YUivHQA_Js49hCk5";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const statusEl = document.getElementById('status');
+const shiftBtns = document.querySelectorAll('.shift-toggle button');
+shiftBtns.forEach(b=>b.addEventListener('click',()=>{
+  shiftBtns.forEach(x=>x.classList.remove('active'));
+  b.classList.add('active');
+  document.getElementById('f-shift').value = b.dataset.v;
+}));
+
+const rateEls = ['hourlyRate','otMultiplier','stdHours'];
+let records = [];
+let rates = {hourlyRate:0, otMultiplier:1.5, stdHours:8};
+let editingId = null;
+
+function fmtMoney(n){ return n.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}); }
+
+function computeHours(inT,outT,breakMin){
+  let [ih,im] = inT.split(':').map(Number);
+  let [oh,om] = outT.split(':').map(Number);
+  let start = ih*60+im, end = oh*60+om;
+  if(end <= start) end += 24*60;
+  let total = (end-start) - (Number(breakMin)||0);
+  return Math.max(0, total/60);
+}
+
+function computeRecord(rec){
+  const hours = computeHours(rec.check_in, rec.check_out, rec.break_min);
+  const std = rates.stdHours;
+  const regular = Math.min(hours, std);
+  const ot = Math.max(0, hours - std);
+  const pay = regular*rates.hourlyRate + ot*rates.hourlyRate*rates.otMultiplier;
+  return {hours, regular, ot, pay};
+}
+
+async function loadAll(){
+  try{
+    const {data, error} = await sb.from('settings').select('*').eq('id',1).single();
+    if(error) throw error;
+    if(data){
+      rates = {hourlyRate: Number(data.hourly_rate), otMultiplier: Number(data.ot_multiplier), stdHours: Number(data.std_hours)};
+    }
+    document.getElementById('hourlyRate').value = rates.hourlyRate;
+    document.getElementById('otMultiplier').value = rates.otMultiplier;
+    document.getElementById('stdHours').value = rates.stdHours;
+
+    const res = await sb.from('attendance').select('*').order('date', {ascending:true});
+    if(res.error) throw res.error;
+    records = res.data || [];
+    statusEl.textContent = 'Connected';
+    statusEl.classList.remove('err');
+  }catch(e){
+    statusEl.textContent = 'Connection error: ' + e.message;
+    statusEl.classList.add('err');
+  }
+  render();
+}
+
+async function saveRates(){
+  rates = {
+    hourlyRate: parseFloat(document.getElementById('hourlyRate').value)||0,
+    otMultiplier: parseFloat(document.getElementById('otMultiplier').value)||1.5,
+    stdHours: parseFloat(document.getElementById('stdHours').value)||8
+  };
+  try{
+    await sb.from('settings').update({
+      hourly_rate: rates.hourlyRate, ot_multiplier: rates.otMultiplier, std_hours: rates.stdHours
+    }).eq('id',1);
+  }catch(e){ console.error(e); }
+  render();
+}
+rateEls.forEach(id=>document.getElementById(id).addEventListener('change', saveRates));
+
+function resetForm(){
+  document.getElementById('entryForm').reset();
+  document.getElementById('f-break').value = 0;
+  shiftBtns.forEach(x=>x.classList.remove('active'));
+  document.querySelector('.shift-toggle button[data-v="day"]').classList.add('active');
+  document.getElementById('f-shift').value = 'day';
+  editingId = null;
+  document.getElementById('submitBtn').textContent = 'Add record';
+  document.getElementById('submitBtn').disabled = false;
+  document.getElementById('editingFlag').classList.remove('show');
+  document.getElementById('cancelBtn').classList.remove('show');
+}
+document.getElementById('cancelBtn').addEventListener('click', resetForm);
+
+document.getElementById('entryForm').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const submitBtn = document.getElementById('submitBtn');
+  submitBtn.disabled = true;
+  const data = {
+    date: document.getElementById('f-date').value,
+    shift: document.getElementById('f-shift').value,
+    check_in: document.getElementById('f-in').value,
+    check_out: document.getElementById('f-out').value,
+    break_min: parseInt(document.getElementById('f-break').value)||0,
+    remark: document.getElementById('f-note').value
+  };
+  try{
+    if(editingId){
+      const {error} = await sb.from('attendance').update(data).eq('id', editingId);
+      if(error) throw error;
+    } else {
+      data.id = Date.now().toString(36);
+      const {error} = await sb.from('attendance').insert(data);
+      if(error) throw error;
+    }
+    await loadAll();
+    resetForm();
+  }catch(e){
+    alert('Save failed: ' + e.message);
+    submitBtn.disabled = false;
+  }
+});
+
+function editRecord(id){
+  const rec = records.find(r=>r.id===id);
+  if(!rec) return;
+  editingId = id;
+  document.getElementById('f-date').value = rec.date;
+  document.getElementById('f-in').value = rec.check_in;
+  document.getElementById('f-out').value = rec.check_out;
+  document.getElementById('f-break').value = rec.break_min;
+  document.getElementById('f-note').value = rec.remark || '';
+  shiftBtns.forEach(x=>x.classList.remove('active'));
+  document.querySelector(`.shift-toggle button[data-v="${rec.shift}"]`).classList.add('active');
+  document.getElementById('f-shift').value = rec.shift;
+  document.getElementById('submitBtn').textContent = 'Update record';
+  document.getElementById('editingFlag').classList.add('show');
+  document.getElementById('cancelBtn').classList.add('show');
+  document.getElementById('entryForm').scrollIntoView({behavior:'smooth', block:'start'});
+}
+window.editRecord = editRecord;
+
+async function deleteRecord(id){
+  if(!confirm('Delete this record?')) return;
+  try{
+    const {error} = await sb.from('attendance').delete().eq('id', id);
+    if(error) throw error;
+    if(editingId===id) resetForm();
+    await loadAll();
+  }catch(e){ alert('Delete failed: ' + e.message); }
+}
+window.deleteRecord = deleteRecord;
+
+function render(){
+  const tbody = document.getElementById('rows');
+  if(records.length===0){
+    tbody.innerHTML = '<tr><td colspan="9"><div class="empty">No records yet. Add your first check-in above.</div></td></tr>';
+  } else {
+    tbody.innerHTML = records.map(rec=>{
+      const c = computeRecord(rec);
+      return `<tr>
+        <td data-label="Date">${rec.date}</td>
+        <td data-label="Shift"><span class="badge ${rec.shift}">${rec.shift}</span></td>
+        <td data-label="In">${rec.check_in}</td>
+        <td data-label="Out">${rec.check_out}</td>
+        <td data-label="Hours">${c.hours.toFixed(2)}</td>
+        <td data-label="OT">${c.ot>0? `<span class="ot-tag">${c.ot.toFixed(2)}</span>`:'-'}</td>
+        <td data-label="Pay">${fmtMoney(c.pay)}</td>
+        <td data-label="Remark" class="remark-cell">${rec.remark ? rec.remark : '-'}</td>
+        <td data-label="">
+          <div class="row-actions">
+            <button class="icon-btn" onclick="editRecord('${rec.id}')">Edit</button>
+            <button class="icon-btn del" onclick="deleteRecord('${rec.id}')">Delete</button>
+          </div>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+
+  const totals = records.reduce((acc,rec)=>{
+    const c = computeRecord(rec);
+    acc.hours += c.hours; acc.ot += c.ot; acc.pay += c.pay; acc.days += 1;
+    return acc;
+  }, {hours:0, ot:0, pay:0, days:0});
+
+  document.getElementById('summary').innerHTML = `
+    <div class="cell"><div class="num">${totals.days}</div><div class="lbl">Days logged</div></div>
+    <div class="cell"><div class="num">${totals.hours.toFixed(1)}</div><div class="lbl">Total hours</div></div>
+    <div class="cell"><div class="num">${totals.ot.toFixed(1)}</div><div class="lbl">OT hours</div></div>
+    <div class="cell"><div class="num">${fmtMoney(totals.pay)}</div><div class="lbl">Total pay</div></div>
+  `;
+}
+
+document.getElementById('exportCsv').addEventListener('click', ()=>{
+  const header = ['Date','Shift','Check In','Check Out','Hours','OT Hours','Pay','Remark'];
+  const lines = records.map(rec=>{
+    const c = computeRecord(rec);
+    const safeNote = (rec.remark||'').replace(/"/g,'""');
+    return [rec.date, rec.shift, rec.check_in, rec.check_out, c.hours.toFixed(2), c.ot.toFixed(2), c.pay.toFixed(2), `"${safeNote}"`].join(',');
+  });
+  const csv = [header.join(','), ...lines].join('\n');
+  const blob = new Blob([csv], {type:'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `timecard_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+document.getElementById('exportPdf').addEventListener('click', ()=>{ window.print(); });
+
+loadAll();
+</script>
+</body>
+</html>
